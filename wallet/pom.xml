@@ -15,6 +15,13 @@
 		<version>1</version>
 	</parent>
 
+    <repositories>
+        <repository>
+            <id>bitcoinj</id>
+            <url>http://distribution.bitcoinj.googlecode.com/git/releases/</url>
+        </repository>
+    </repositories>
+
 	<dependencies>
 
 		<!-- android.*, java.*, javax.* -->

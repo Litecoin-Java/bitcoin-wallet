@@ -23,6 +23,14 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import android.app.AlertDialog;
+import android.util.Log;
+import android.widget.Toast;
+import com.google.bitcoin.core.ECKey;
+import com.google.bitcoin.core.InsufficientMoneyException;
+import com.google.bitcoin.core.TransactionOutput;
+import de.schildbach.wallet.util.IntentIntegratorSupportV4;
+import de.schildbach.wallet.util.IntentResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,13 +99,14 @@ import de.schildbach.wallet.offline.SendBluetoothTask;
 import de.schildbach.wallet.ui.InputParser.StringInputParser;
 import de.schildbach.wallet.util.GenericUtils;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class SendCoinsFragment extends SherlockFragment
 {
+    private final String TAG = this.getClass().getName();
 	private AbstractBindServiceActivity activity;
 	private WalletApplication application;
 	private Wallet wallet;
@@ -146,8 +155,8 @@ public final class SendCoinsFragment extends SherlockFragment
 
 	private static final int ID_RATE_LOADER = 0;
 
-	private static final int REQUEST_CODE_SCAN = 0;
-	private static final int REQUEST_CODE_ENABLE_BLUETOOTH = 1;
+    private static final int REQUEST_CODE_SCAN = 0;
+    private static final int REQUEST_CODE_ENABLE_BLUETOOTH = 1;
 
 	private static final Logger log = LoggerFactory.getLogger(SendCoinsFragment.class);
 
@@ -487,7 +496,7 @@ public final class SendCoinsFragment extends SherlockFragment
 			final String scheme = intentUri != null ? intentUri.getScheme() : null;
 
 			if ((Intent.ACTION_VIEW.equals(action) || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) && intentUri != null
-					&& "bitcoin".equals(scheme))
+					&& "litecoin".equals(scheme))
 				initStateFromBitcoinUri(intentUri);
 			else if (intent.hasExtra(SendCoinsActivity.INTENT_EXTRA_ADDRESS))
 				initStateFromIntentExtras(intent.getExtras());
@@ -513,13 +522,13 @@ public final class SendCoinsFragment extends SherlockFragment
 		new StringInputParser(input)
 		{
 			@Override
-			protected void bitcoinRequest(final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
+			protected void bitcoinRequest(@Nonnull final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
 			{
 				update(address.toString(), addressLabel, amount, bluetoothMac);
 			}
 
 			@Override
-			protected void directTransaction(final Transaction transaction)
+			protected void directTransaction(@Nonnull final Transaction transaction)
 			{
 				cannotClassify(input);
 			}
@@ -529,6 +538,12 @@ public final class SendCoinsFragment extends SherlockFragment
 			{
 				dialog(activity, dismissListener, 0, messageResId, messageArgs);
 			}
+
+            @Override
+            protected void handlePrivateKey(@Nonnull ECKey key) {
+                final Address address = new Address(Constants.NETWORK_PARAMETERS, key.getPubKeyHash());
+                bitcoinRequest(address, null, null, null);
+            }
 
 			private final DialogInterface.OnClickListener dismissListener = new DialogInterface.OnClickListener()
 			{
@@ -623,7 +638,8 @@ public final class SendCoinsFragment extends SherlockFragment
 		if (savedInstanceState.containsKey("sent_transaction_hash"))
 		{
 			sentTransaction = wallet.getTransaction((Sha256Hash) savedInstanceState.getSerializable("sent_transaction_hash"));
-			sentTransaction.getConfidence().addEventListener(sentTransactionConfidenceListener);
+            if(sentTransaction != null)
+			    sentTransaction.getConfidence().addEventListener(sentTransactionConfidenceListener);
 		}
 
 		bluetoothMac = savedInstanceState.getString("bluetooth_mac");
@@ -635,39 +651,58 @@ public final class SendCoinsFragment extends SherlockFragment
 	@Override
 	public void onActivityResult(final int requestCode, final int resultCode, final Intent intent)
 	{
-		if (requestCode == REQUEST_CODE_SCAN)
-		{
-			if (resultCode == Activity.RESULT_OK)
-			{
-				final String input = intent.getStringExtra(ScanActivity.INTENT_EXTRA_RESULT);
+        final String input;
+        if (requestCode == REQUEST_CODE_ENABLE_BLUETOOTH)
+        {
+            bluetoothEnableView.setChecked(resultCode == Activity.RESULT_OK);
+        }
+        else
+        {
+            /* Check if user wants to use internal scanner */
+            if(prefs.getString(Constants.PREFS_KEY_QR_SCANNER, "").equals("internal"))
+            {
+                input = intent.getStringExtra(ScanActivity.INTENT_EXTRA_RESULT);
+            }
+            else
+            {
+                IntentResult scanResult = IntentIntegratorSupportV4.parseActivityResult(requestCode, resultCode, intent);
+                if (scanResult != null)
+                    input = scanResult.getContents();
+                else
+                    input = null;
+            }
 
-				new StringInputParser(input)
-				{
-					@Override
-					protected void bitcoinRequest(final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
-					{
-						SendCoinsActivity.start(activity, address != null ? address.toString() : null, addressLabel, amount, bluetoothMac);
-					}
+            if(input == null) return;
+            Log.d("Litecoin", "SCAN RESULT:" + input);
 
-					@Override
-					protected void directTransaction(final Transaction transaction)
-					{
-						cannotClassify(input);
-					}
+            new StringInputParser(input)
+            {
+                @Override
+                protected void bitcoinRequest(@Nonnull final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
+                {
+                    SendCoinsActivity.start(activity, address.toString(), addressLabel, amount, bluetoothMac);
+                }
 
-					@Override
-					protected void error(final int messageResId, final Object... messageArgs)
-					{
-						dialog(activity, null, R.string.button_scan, messageResId, messageArgs);
-					}
-				}.parse();
-			}
-		}
-		else if (requestCode == REQUEST_CODE_ENABLE_BLUETOOTH)
-		{
-			bluetoothEnableView.setChecked(resultCode == Activity.RESULT_OK);
-		}
-	}
+                @Override
+                protected void directTransaction(@Nonnull final Transaction transaction)
+                {
+                    cannotClassify(input);
+                }
+
+                @Override
+                protected void error(final int messageResId, final Object... messageArgs)
+                {
+                    dialog(activity, null, R.string.button_scan, messageResId, messageArgs);
+                }
+
+                @Override
+                protected void handlePrivateKey(@Nonnull ECKey key) {
+                    final Address address = new Address(Constants.NETWORK_PARAMETERS, key.getPubKeyHash());
+                    bitcoinRequest(address, null, null, null);
+                }
+            }.parse();
+        }
+    }
 
 	@Override
 	public void onCreateOptionsMenu(final Menu menu, final MenuInflater inflater)
@@ -727,10 +762,6 @@ public final class SendCoinsFragment extends SherlockFragment
 					validatedAddress = new AddressAndLabel(Constants.NETWORK_PARAMETERS, addressStr, label);
 					receivingAddressView.setText(null);
 				}
-			}
-			else
-			{
-				// empty field should not raise error message
 			}
 		}
 		catch (final AddressFormatException x)
@@ -840,61 +871,291 @@ public final class SendCoinsFragment extends SherlockFragment
 		updateView();
 
 		// create spend
-		final BigInteger amount = amountCalculatorLink.getAmount();
-		final SendRequest sendRequest = SendRequest.to(validatedAddress.address, amount);
-		sendRequest.changeAddress = WalletUtils.pickOldestKey(wallet).toAddress(Constants.NETWORK_PARAMETERS);
-		sendRequest.emptyWallet = amount.equals(wallet.getBalance(BalanceType.AVAILABLE));
+		BigInteger amount = amountCalculatorLink.getAmount();
+        BigInteger origAmount = amount;
+		SendRequest baseSendRequest = SendRequest.to(validatedAddress.address, amount);
+        baseSendRequest.changeAddress = WalletUtils.pickOldestKey(wallet).toAddress(Constants.NETWORK_PARAMETERS);
+        baseSendRequest.emptyWallet = amount.equals(wallet.getBalance(BalanceType.AVAILABLE));
 
-		new SendCoinsOfflineTask(wallet, backgroundHandler)
-		{
-			@Override
-			protected void onSuccess(final Transaction transaction)
-			{
-				sentTransaction = transaction;
+        // Multi-part transaction creation to properly calculate fee
+        Log.i(TAG, "Initial outputs: ");
+        for(TransactionOutput o : baseSendRequest.tx.getOutputs()) {
+            Log.i(TAG, "\t" + o.getValue().toString());
+        }
+        // First, check if we're emptying the wallet
+        if(baseSendRequest.emptyWallet) {
+            // HACK to fix zero fee calculated by bitcoinj in this case
+            // We subtract the minimum TX fee to allow completeTx to correctly
+            // calculate the fee based on the TX size.
+            // NOTE: Emptying is the ONLY case where it is OK to subtract a
+            // higher fee from the
+            Log.i(TAG, "Wallet empty: ");
+            for(TransactionOutput o : baseSendRequest.tx.getOutputs()) {
+                Log.i(TAG, "\t" + o.getValue().toString());
+            }
+            amount = amount.subtract(Constants.MIN_TX_FEE);
+            baseSendRequest = SendRequest.to(validatedAddress.address, amount);
+            Log.i(TAG, "After refactoring: ");
+            for(TransactionOutput o : baseSendRequest.tx.getOutputs()) {
+                Log.i(TAG, "\t" + o.getValue().toString());
+            }
+            // Complete the transaction in order to get the final size
+            try {
+                wallet.completeTx(baseSendRequest);
+            } catch (InsufficientMoneyException e) {
+                // This will happen if the fee needs to be larger than the minimum.
+                // Recalculate and try again.
+                amount = amount.subtract(e.missing);
+                baseSendRequest = SendRequest.to(validatedAddress.address, amount);
+                Log.e(TAG, "Trying tx: ");
+                for(TransactionOutput o : baseSendRequest.tx.getOutputs()) {
+                    Log.i(TAG, "\t" + o.getValue().toString());
+                }
+                try {
+                    wallet.completeTx(baseSendRequest);
+                } catch(InsufficientMoneyException f) {
+                    // We tried - it didn't work.
+                    Log.i(TAG, "Insufficient funds when completing tx: ");
+                    for(TransactionOutput o : baseSendRequest.tx.getOutputs()) {
+                        Log.i(TAG, "\t" + o.getValue().toString());
+                    }
+                    Toast
+                      .makeText(getActivity(), "Unexpected Error: Insufficient Funds when recreating emptying tx. " +
+                                    "Please report this as a bug!", Toast.LENGTH_LONG)
+                      .show();
+                    state = State.INPUT;
+                    updateView();
+                    return;
+                }
+            }
+            final SendRequest dialogSendRequest = baseSendRequest;
+            new AlertDialog.Builder(SendCoinsFragment.this.getActivity())
+                    .setTitle(activity.getString(R.string.sendcoins_fee_required))
+                    .setMessage("A fee of " +
+                            GenericUtils.formatValue(origAmount.subtract(amount), Constants.BTC_MAX_PRECISION, 0) +
+                            " is required to complete this transaction.")
+                    .setCancelable(true)
+                    .setNeutralButton(android.R.string.cancel,
+                            new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int whichButton) {
+                                    state = State.INPUT;
+                                    updateView();
+                                }
+                            })
+                    .setPositiveButton(android.R.string.ok,
+                            new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialogInterface, int i) {
+                                    finalizeSend(dialogSendRequest);
+                                }
+                            })
+                    .show();
+        }
+        else {
+            // We're not emptying.
+            try {
+                wallet.completeTx(baseSendRequest);
+            } catch (InsufficientMoneyException e) {
+                Log.i(TAG, "Current TX: " + baseSendRequest.tx.toString());
+                Log.i(TAG, "Insufficient funds when completing tx: ");
+                for(TransactionOutput o : baseSendRequest.tx.getOutputs()) {
+                    Log.i(TAG, "\t" + o.getValue().toString());
+                }
+                // This is likely due to fees, since the wallet checks the value against the wallet
+                // on input field change.  Here's the rub: obviously our wallet doesn't have enough to
+                // pay the whole fee.  We should just let the user know so they can manually adjust
+                // their transaction.
+                BigInteger missing = e.missing == null ? new BigInteger("0") : e.missing;
+                new AlertDialog.Builder(SendCoinsFragment.this.getActivity())
+                        .setTitle(activity.getString(R.string.sendcoins_title_insufficientfunds))
+                        .setMessage(activity.getString(R.string.sendcoins_insufficient_preamble) + " " +
+                                activity.getString(R.string.sendcoins_insufficient_amount_prefix) + " " +
+                                GenericUtils.formatValue(missing, Constants.BTC_MAX_PRECISION, 0) + " " +
+                                activity.getString(R.string.sendcoins_insufficient_amount_suffix) + " " +
+                                activity.getString(R.string.sendcoins_insufficient_instructions))
+                        .setPositiveButton(android.R.string.ok,
+                                new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialogInterface, int i) {
+                                        state = State.INPUT;
+                                        updateView();
+                                    }
+                                })
+                        .show();
+                return;
+            }
+            // We have enough money to complete the transaction
+            // Now that the transaction is complete, adjust the outputs so change goes to fee
+            // if < 0.001 LTC.  Otherwise, we would need to add a penalty for the output that is
+            // larger than the output itself, so it costs LESS to just throw it into the fee.
+            for(TransactionOutput o: baseSendRequest.tx.getOutputs()) {
+                if(o.isMine(wallet) &&
+                        o.getValue().compareTo(Constants.CENT.divide(new BigInteger("10"))) < 0) {
+                    Log.i(TAG, "Found a small change output of " + o.getValue() + "; putting in fee.");
+                    // Removing the output means the value will go to fee
+                    baseSendRequest.tx.removeOutput(o);
+                    try {
+                        baseSendRequest.setCompleted(false);
+                        wallet.completeTx(baseSendRequest);
+                    } catch (InsufficientMoneyException e) {
+                        // This should never happen because we're only changing where outputs go
+                        Log.e(TAG, "UNEXPECTED ERROR: InsufficientMoneyException when redirecting outputs!");
+                        Toast
+                                .makeText(getActivity(), "Unexpected Error: Insufficient Funds when moving change to fee.  " +
+                                        "Please report this as a bug!", Toast.LENGTH_LONG)
+                                .show();
+                        state = State.INPUT;
+                        updateView();
+                        return;
+                    }
+                }
+            }
+            Log.i(TAG, "Current TX: " + baseSendRequest.tx.toString());
+            // Inform the user of any extra fees if necessary
+            if(baseSendRequest.fee.compareTo(Constants.MIN_TX_FEE) > 0) {
+                // User can continue or cancel, go to finalizeSend on continue
+                BigInteger difference = baseSendRequest.fee.subtract(Constants.MIN_TX_FEE);
+                final SendRequest dialogSendRequest = baseSendRequest;
+                new AlertDialog.Builder(SendCoinsFragment.this.getActivity())
+                    .setTitle(activity.getString(R.string.sendcoins_fee_required))
+                    .setMessage("An extra fee of " +
+                            GenericUtils.formatValue(difference, Constants.BTC_MAX_PRECISION, 0) +
+                            " is required to complete this transaction.")
+                    .setCancelable(true)
+                    .setNeutralButton(android.R.string.cancel,
+                            new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int whichButton) {
+                                    state = State.INPUT;
+                                    updateView();
+                                }
+                            })
+                    .setPositiveButton(android.R.string.ok,
+                            new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialogInterface, int i) {
+                                    finalizeSend(dialogSendRequest);
+                                }
+                            })
+                    .show();
+            }
+            else {
+                Log.i(TAG, "Current TX: " + baseSendRequest.tx.toString());
+                // Default fee - just continue to the confirmation dialog
+                finalizeSend(baseSendRequest);
+            }
+        }
+    }
 
-				state = State.SENDING;
-				updateView();
+    private void finalizeSend(SendRequest baseSendRequest) {
+        // Lock in sendRequest
+        final SendRequest sendRequest = baseSendRequest;
 
-				sentTransaction.getConfidence().addEventListener(sentTransactionConfidenceListener);
+        Log.i(TAG, "Final fee: " + sendRequest.fee.toString());
+        Log.i(TAG, "Final bytes: " + sendRequest.tx.getLength());
+        LayoutInflater inflater = LayoutInflater.from(getActivity());
+        View confirmView = inflater.inflate(R.layout.tx_confirm, null);
+        TextView v_to = (TextView)confirmView.findViewById(R.id.txconfirm_to);
+        CurrencyTextView v_value = (CurrencyTextView)confirmView.findViewById(R.id.txconfirm_value);
+        CurrencyTextView v_fee = (CurrencyTextView)confirmView.findViewById(R.id.txconfirm_fee);
+        CurrencyTextView v_total = (CurrencyTextView)confirmView.findViewById(R.id.txconfirm_total);
+        v_to.setText(validatedAddress.address.toString());
+        v_value.setPrecision(Constants.LOCAL_PRECISION, 0);
+        v_value.setInsignificantRelativeSize(1);
+        v_fee.setPrecision(Constants.LOCAL_PRECISION, 0);
+        v_fee.setInsignificantRelativeSize(1);
+        v_total.setPrecision(Constants.LOCAL_PRECISION, 0);
+        v_total.setInsignificantRelativeSize(1);
+        // Set value to total deduction from wallet
+        // This is the amount coming FROM our wallet
+        //   minus the amount going back INTO our wallet
+        //   minus the FEE.
+        v_value.setAmount(sendRequest.tx.getValueSentFromMe(wallet)
+                .subtract(sendRequest.tx.getValueSentToMe(wallet))
+                .subtract(sendRequest.fee));
+        // Set value to fee
+        v_fee.setAmount(new BigInteger(sendRequest.fee.toString()));
+        // Set value to overall total exiting wallet
+        v_total.setAmount(sendRequest.tx.getValueSentFromMe(wallet)
+                .subtract(sendRequest.tx.getValueSentToMe(wallet)));
+        new AlertDialog.Builder(SendCoinsFragment.this.getActivity())
+                .setView(confirmView)
+                .setCancelable(true)
+                .setNeutralButton(android.R.string.cancel,
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int whichButton) {
+                                state = State.INPUT;
+                                updateView();
+                            }
+                        })
+                .setPositiveButton(android.R.string.ok,
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                // Fees are agreeable
+                                // Process the transaction
+                                // Send Asynchronously
+                                new NormalSendCoinsOfflineTask(wallet, backgroundHandler).commitRequest(sendRequest);
+                            }
+                        })
+                .show();
 
-				if (bluetoothAdapter != null && bluetoothAdapter.isEnabled() && bluetoothMac != null && bluetoothEnableView.isChecked())
-				{
-					new SendBluetoothTask(bluetoothAdapter, backgroundHandler)
-					{
-						@Override
-						protected void onResult(final boolean ack)
-						{
-							bluetoothAck = ack;
 
-							if (state == State.SENDING)
-								state = State.SENT;
-
-							updateView();
-						}
-					}.send(bluetoothMac, transaction); // send asynchronously
-				}
-
-				application.broadcastTransaction(sentTransaction);
-
-				final Intent result = new Intent();
-				BitcoinIntegration.transactionHashToResult(result, sentTransaction.getHashAsString());
-				activity.setResult(Activity.RESULT_OK, result);
-			}
-
-			@Override
-			protected void onFailure()
-			{
-				state = State.FAILED;
-				updateView();
-
-				activity.longToast(R.string.send_coins_error_msg);
-			}
-		}.sendCoinsOffline(sendRequest); // send asynchronously
 	}
+
+    class NormalSendCoinsOfflineTask extends SendCoinsOfflineTask {
+
+        public NormalSendCoinsOfflineTask(@Nonnull Wallet wallet, @Nonnull Handler backgroundHandler) {
+            super(wallet, backgroundHandler);
+        }
+
+        @Override
+        protected void onSuccess(@Nonnull final Transaction transaction)
+        {
+            sentTransaction = transaction;
+
+            state = State.SENDING;
+            updateView();
+
+            sentTransaction.getConfidence().addEventListener(sentTransactionConfidenceListener);
+
+            if (bluetoothAdapter != null && bluetoothAdapter.isEnabled() && bluetoothMac != null && bluetoothEnableView.isChecked())
+            {
+                new SendBluetoothTask(bluetoothAdapter, backgroundHandler)
+                {
+                    @Override
+                    protected void onResult(final boolean ack)
+                    {
+                        bluetoothAck = ack;
+
+                        if (state == State.SENDING)
+                            state = State.SENT;
+
+                        updateView();
+                    }
+                }.send(bluetoothMac, transaction); // send asynchronously
+            }
+
+            application.broadcastTransaction(sentTransaction);
+
+            final Intent result = new Intent();
+            BitcoinIntegration.transactionHashToResult(result, sentTransaction.getHashAsString());
+            activity.setResult(Activity.RESULT_OK, result);
+        }
+
+        @Override
+        protected void onFailure()
+        {
+            state = State.FAILED;
+            updateView();
+
+            activity.longToast(R.string.send_coins_error_msg);
+        }
+    }
 
 	private void handleScan()
 	{
-		startActivityForResult(new Intent(activity, ScanActivity.class), REQUEST_CODE_SCAN);
+        if(prefs.getString(Constants.PREFS_KEY_QR_SCANNER, "").equals("internal")) {
+            startActivityForResult(new Intent(activity, ScanActivity.class), REQUEST_CODE_SCAN);
+        } else {
+            IntentIntegratorSupportV4 integrator = new IntentIntegratorSupportV4(this);
+            integrator.initiateScan();
+        }
 	}
 
 	private void handleEmpty()
@@ -940,8 +1201,14 @@ public final class SendCoinsFragment extends SherlockFragment
 		@Override
 		public Cursor runQueryOnBackgroundThread(final CharSequence constraint)
 		{
-			final Cursor cursor = activity.managedQuery(AddressBookProvider.contentUri(activity.getPackageName()), null,
-					AddressBookProvider.SELECTION_QUERY, new String[] { constraint.toString() }, null);
+            final Cursor cursor;
+            try {
+			    cursor = activity.managedQuery(AddressBookProvider.contentUri(activity.getPackageName()),
+                    null, AddressBookProvider.SELECTION_QUERY, new String[] { constraint.toString() }, null);
+            } catch(NullPointerException e) {
+                Log.i("wallet_ltc", "NULL Pointer exception when doing address book completion");
+                return null;
+            }
 			return cursor;
 		}
 	}
@@ -1068,7 +1335,7 @@ public final class SendCoinsFragment extends SherlockFragment
 		// focus
 		if (receivingAddress != null && amount == null)
 			amountCalculatorLink.requestFocus();
-		else if (receivingAddress != null && amount != null)
+		else if (receivingAddress != null)
 			viewGo.requestFocus();
 
 		this.bluetoothMac = bluetoothMac;

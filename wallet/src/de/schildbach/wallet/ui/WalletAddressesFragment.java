@@ -35,7 +35,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceManager;
-import android.text.ClipboardManager;
 import android.view.View;
 import android.widget.BaseAdapter;
 import android.widget.ListAdapter;
@@ -56,13 +55,14 @@ import com.google.bitcoin.uri.BitcoinURI;
 import de.schildbach.wallet.AddressBookProvider;
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.WalletApplication;
+import de.schildbach.wallet.util.AbstractClipboardManager;
 import de.schildbach.wallet.util.BitmapFragment;
 import de.schildbach.wallet.util.Qr;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class WalletAddressesFragment extends SherlockListFragment
 {
@@ -169,9 +169,8 @@ public final class WalletAddressesFragment extends SherlockListFragment
 			@Override
 			public boolean onCreateActionMode(final ActionMode mode, final Menu menu)
 			{
-				final MenuInflater inflater = mode.getMenuInflater();
-				inflater.inflate(R.menu.wallet_addresses_context, menu);
-
+                final MenuInflater inflater = mode.getMenuInflater();
+                inflater.inflate(R.menu.wallet_addresses_context, menu);
 				return true;
 			}
 
@@ -249,15 +248,15 @@ public final class WalletAddressesFragment extends SherlockListFragment
 
 			private void handleShowQr(@Nonnull final Address address)
 			{
-				final String uri = BitcoinURI.convertToBitcoinURI(address, null, null, null);
+				final String uri = BitcoinURI.convertToBitcoinURI(Constants.NETWORK_PARAMETERS, address, null, null, null);
 				final int size = (int) (256 * getResources().getDisplayMetrics().density);
 				BitmapFragment.show(getFragmentManager(), Qr.bitmap(uri, size));
 			}
 
 			private void handleCopyToClipboard(@Nonnull final Address address)
 			{
-				final ClipboardManager clipboardManager = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
-				clipboardManager.setText(address.toString());
+				final AbstractClipboardManager clipboardManager = new AbstractClipboardManager(activity);
+				clipboardManager.setText("address", address.toString());
 				activity.toast(R.string.wallet_address_fragment_clipboard_msg);
 			}
 

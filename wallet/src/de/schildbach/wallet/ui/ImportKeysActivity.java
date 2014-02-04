@@ -38,16 +38,17 @@ import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
 
+import android.widget.Toast;
 import com.google.bitcoin.core.ECKey;
 import com.google.bitcoin.core.Wallet;
 
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.util.Crypto;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class ImportKeysActivity extends AbstractWalletActivity
 {
@@ -104,7 +105,12 @@ public final class ImportKeysActivity extends AbstractWalletActivity
 			{
 				final String password = passwordView.getText().toString().trim();
 				passwordView.setText(null); // get rid of it asap
-
+                if(backupFileUri == null) {
+                    Toast.makeText(ImportKeysActivity.this,
+                            "File URI was null.  Please let developer know.", Toast.LENGTH_LONG)
+                            .show();
+                    return;
+                }
 				try
 				{
 					final InputStream is = contentResolver.openInputStream(backupFileUri);

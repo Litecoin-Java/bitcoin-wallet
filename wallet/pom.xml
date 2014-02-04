@@ -6,8 +6,8 @@
 
 	<artifactId>wallet</artifactId>
 	<packaging>apk</packaging>
-	<version>3.29-test</version>
-	<name>Bitcoin Wallet</name>
+	<version>3.30.4</version>
+	<name>Litecoin Wallet</name>
 
 	<parent>
 		<groupId>de.schildbach.wallet</groupId>
@@ -34,18 +34,21 @@
 			<scope>provided</scope>
 		</dependency>
 
-		<!-- android.support.v4.* -->
+
+        <!-- android.support.v4.* -->
 		<dependency>
 			<groupId>com.google.android</groupId>
 			<artifactId>support-v4</artifactId>
-			<version>r7</version>
-		</dependency>
+			<version>r13</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/libs/android-support-v4.jar</systemPath>
+        </dependency>
 
 		<!-- com.actionbarsherlock.* -->
 		<dependency>
 			<groupId>com.actionbarsherlock</groupId>
-			<artifactId>library</artifactId>
-			<version>4.1.0</version>
+			<artifactId>actionbarsherlock</artifactId>
+			<version>4.4.0</version>
 			<type>apklib</type>
 		</dependency>
 
@@ -53,7 +56,7 @@
 		<dependency>
 			<groupId>com.google</groupId>
 			<artifactId>bitcoinj</artifactId>
-			<version>0.10.3</version>
+			<version>0.11-SNAPSHOT</version>
 		</dependency>
 
 		<!-- de.schildbach.wallet.integration.android.* -->
@@ -61,6 +64,7 @@
 			<groupId>de.schildbach.wallet</groupId>
 			<artifactId>integration-android</artifactId>
 			<version>1.0</version>
+			<type>apklib</type>
 		</dependency>
 
 		<!-- com.google.zxing.* -->
@@ -119,7 +123,7 @@
 						<configuration>
 							<release>true</release>
 							<proguard>
-								<skip>false</skip>
+								<skip>true</skip>
 							</proguard>
 						</configuration>
 					</plugin>
@@ -140,21 +144,6 @@
 				<configuration>
 					<source>1.6</source>
 					<target>1.6</target>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>com.jayway.maven.plugins.android.generation2</groupId>
-				<artifactId>android-maven-plugin</artifactId>
-				<configuration>
-					<excludeJarResources>
-						<excludeJarResource>.*\.jar$</excludeJarResource>
-					</excludeJarResources>
-					<sdk>
-						<platform>14</platform>
-					</sdk>
-					<sign>
-						<debug>both</debug>
-					</sign>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -182,7 +171,72 @@
 					</excludes>
 				</configuration>
 			</plugin>
-		</plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jarsigner-plugin</artifactId>
+                <version>1.2</version>
+                <executions>
+                    <execution>
+                        <id>signing</id>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                        <phase>package</phase>
+                        <inherited>true</inherited>
+                        <configuration>
+                            <includes>
+                                <include>target/*.apk</include>
+                            </includes>
+                            <keystore>${sign.keystore}</keystore>
+                            <alias>${sign.alias}</alias>
+                            <storepass>${sign.storepass}</storepass>
+                            <keypass>${sign.keypass}</keypass>
+                            <verbose>true</verbose>
+                            <alias>litecoin-project</alias>
+                            <arguments>
+                                <argument>-sigalg</argument><argument>MD5withRSA</argument>
+                                <argument>-digestalg</argument><argument>SHA1</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.jayway.maven.plugins.android.generation2</groupId>
+                <artifactId>android-maven-plugin</artifactId>
+                <version>3.8.0</version>
+                <inherited>true</inherited>
+                <configuration>
+                    <excludeJarResources>
+                        <excludeJarResource>.*\.jar$</excludeJarResource>
+                    </excludeJarResources>
+                    <sdk>
+                        <platform>14</platform>
+                    </sdk>
+                    <proguard>
+                        <skip>true</skip>
+                    </proguard>
+                    <sign>
+                        <debug>false</debug>
+                    </sign>
+                    <zipalign>
+                        <skip>false</skip>
+                        <verbose>true</verbose>
+                        <inputApk>${project.build.directory}/${project.artifactId}-${project.version}.apk</inputApk>
+                        <outputApk>${project.build.directory}/${project.artifactId}-${project.version}-signed-aligned.apk</outputApk>
+                    </zipalign>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>alignApk</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>zipalign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
 	</build>
 
 	<!-- to generate reports, run: mvn clean install site -->
@@ -190,9 +244,9 @@
 	<reporting>
 		<plugins>
 			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>findbugs-maven-plugin</artifactId>
-				<version>2.5.2</version>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>findbugs-maven-plugin</artifactId>
+                <version>2.5.4-SNAPSHOT</version>
 				<configuration>
 					<onlyAnalyze>de.schildbach.wallet.-</onlyAnalyze>
 				</configuration>

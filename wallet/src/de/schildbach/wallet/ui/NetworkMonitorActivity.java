@@ -27,10 +27,10 @@ import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.view.MenuItem;
 
 import de.schildbach.wallet.util.ViewPagerTabs;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class NetworkMonitorActivity extends AbstractWalletActivity
 {

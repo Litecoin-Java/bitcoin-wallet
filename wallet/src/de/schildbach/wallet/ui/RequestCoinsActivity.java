@@ -23,10 +23,10 @@ import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
 
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class RequestCoinsActivity extends AbstractBindServiceActivity
 {
@@ -59,7 +59,7 @@ public final class RequestCoinsActivity extends AbstractBindServiceActivity
 				return true;
 
 			case R.id.request_coins_options_help:
-				HelpDialogFragment.page(getSupportFragmentManager(), "help_request_coins");
+				HelpDialogFragment.page(getSupportFragmentManager(), R.string.help_request_coins);
 				return true;
 		}
 

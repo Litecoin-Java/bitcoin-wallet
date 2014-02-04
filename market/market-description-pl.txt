@@ -1,20 +1,22 @@
-Samodzielny portfel Bitcoin dla Twojego urządzenia Android. Możesz wysyłać Bitcoin pomiędzy telefonami skanując kod QR, który jest wyświetlany przez aplikacje, lub przez NFC (Near Field Communication).
+Miej swoje Litecoiny zawsze w swojej kieszeni! Zapłacisz skanując kod QR. Jako sprzedawca odbierzesz płatności niezawodnie i natychmiastowo. Litecoin Wallet jest pierwszą aplikacją Litecoinową na telefony i niezaprzeczalnie najbezpieczniejszą.
 
-FUNKCJE:
+WŁAŚCIWOŚCI:
 
-• Wyświetlanie stanu konta portfela w Bitcoin i rożnych innych walutach.
-• Wysyłanie i odbieranie Bitcoin przez NFC, kod QR albo Bitcoin URL.
-• Książka adresowa dla regularnie używanych adresów Bitcoin.
-• Możliwość dodania transakcji offline, wykonywanych po połączeniu z siecią.
-• Notyfikacje systemowe o połączeniu z siecią Bitcoin i otrzymanych monetach.
-• Widget na stan konta Bitcoin.
+• Brak konieczności rejestracji, serwisu online lub chmury! Ten portfel używa zdecentralizowanej sieci peer-to-peer.
+• Wyświetl ilość kwotę w LTC i mLTC.
+• Zamiana z i na waluty narodowe
+• Wysyłąnie i odbieranie Litecoin za pomocą NFC, kodów QR czy adresów Litecoin URL.
+• Książka adresowa dla regularnie używanych adresów Litecoin.
+• Gdy jesteś offline, wciąż możesz zapłacić przy użyciu Bluetooth.
+• System powiadomień dla przychodzących transakcji.
+• Widget aplikacji dla stanu konta.
 
-Więcej o Bitcoin dowiesz się pod adresem:
-http://bitcoin.org
+Dowiedz się więcej o Litecoin
+http://litecoin.org
 
-Jeżeli chcesz wesprzeć Bitcoin Wallet, kody źródłowe projektu znajdują się pod adresem:
-https://github.com/schildbach/bitcoin-wallet
+Jeśli chcesz przyczynić się do rozwoju Litecoin Wallet to projekt znajduje się pod adresem
+https://github.com/Litecoin-Java/bitcoin-wallet
 
 Licencja: GPLv3
-Używanie jedynie na własne ryzyko!
+Używasz na własne ryzyko!
 http://www.gnu.org/licenses/gpl-3.0.en.html

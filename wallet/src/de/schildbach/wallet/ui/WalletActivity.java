@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 the original author or authors.
+ * Copyright 2011-2013 the original author or authors.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,16 +33,18 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import javax.annotation.Nonnull;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.DialogInterface;
@@ -61,6 +63,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.text.format.DateUtils;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
@@ -75,6 +78,9 @@ import com.google.bitcoin.core.ECKey;
 import com.google.bitcoin.core.Transaction;
 import com.google.bitcoin.core.Wallet;
 
+import de.schildbach.wallet.util.GenericUtils;
+import de.schildbach.wallet.util.IntentIntegrator;
+import de.schildbach.wallet.util.IntentResult;
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.WalletApplication;
 import de.schildbach.wallet.ui.InputParser.BinaryInputParser;
@@ -82,13 +88,12 @@ import de.schildbach.wallet.ui.InputParser.StringInputParser;
 import de.schildbach.wallet.util.CrashReporter;
 import de.schildbach.wallet.util.Crypto;
 import de.schildbach.wallet.util.HttpGetThread;
-import de.schildbach.wallet.util.Iso8601Format;
 import de.schildbach.wallet.util.Nfc;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class WalletActivity extends AbstractOnDemandServiceActivity
 {
@@ -150,13 +155,13 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 			new BinaryInputParser(inputType, input)
 			{
 				@Override
-				protected void bitcoinRequest(final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
+				protected void bitcoinRequest(@Nonnull final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
 				{
 					cannotClassify(inputType);
 				}
 
 				@Override
-				protected void directTransaction(final Transaction transaction)
+				protected void directTransaction(@Nonnull final Transaction transaction)
 				{
 					processDirectTransaction(transaction);
 				}
@@ -166,6 +171,12 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 				{
 					dialog(WalletActivity.this, null, 0, messageResId, messageArgs);
 				}
+
+                @Override
+                protected void handlePrivateKey(@Nonnull ECKey key) {
+                    final Address address = new Address(Constants.NETWORK_PARAMETERS, key.getPubKeyHash());
+                    bitcoinRequest(address, null, null, null);
+                }
 			}.parse();
 		}
 	}
@@ -173,31 +184,70 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 	@Override
 	public void onActivityResult(final int requestCode, final int resultCode, final Intent intent)
 	{
-		if (requestCode == REQUEST_CODE_SCAN && resultCode == Activity.RESULT_OK)
-		{
-			final String input = intent.getStringExtra(ScanActivity.INTENT_EXTRA_RESULT);
+        final String input;
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        /* Check if user wants to use internal scanner */
+        if(prefs.getString(Constants.PREFS_KEY_QR_SCANNER, "").equals("internal"))
+        {
+            input = intent.getStringExtra(ScanActivity.INTENT_EXTRA_RESULT);
+        }
+        else
+        {
+            IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
+            if (scanResult != null)
+                input = scanResult.getContents();
+            else
+                input = null;
+        }
 
-			new StringInputParser(input)
-			{
-				@Override
-				protected void bitcoinRequest(final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
-				{
-					SendCoinsActivity.start(WalletActivity.this, address != null ? address.toString() : null, addressLabel, amount, bluetoothMac);
-				}
+        new StringInputParser(input)
+        {
+            @Override
+            protected void bitcoinRequest(@Nonnull final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
+            {
+                SendCoinsActivity.start(WalletActivity.this, address.toString(), addressLabel, amount, bluetoothMac);
+            }
 
-				@Override
-				protected void directTransaction(final Transaction tx)
-				{
-					processDirectTransaction(tx);
-				}
+            @Override
+            protected void directTransaction(@Nonnull final Transaction tx)
+            {
+                processDirectTransaction(tx);
+            }
 
-				@Override
-				protected void error(final int messageResId, final Object... messageArgs)
-				{
-					dialog(WalletActivity.this, null, R.string.button_scan, messageResId, messageArgs);
-				}
-			}.parse();
-		}
+            @Override
+            protected void error(final int messageResId, final Object... messageArgs)
+            {
+                dialog(WalletActivity.this, null, R.string.button_scan, messageResId, messageArgs);
+            }
+
+            @Override
+            protected void handlePrivateKey(@Nonnull final ECKey key) {
+                // We actually want to add this key to the wallet here.
+                // Set the creation time to now
+                key.setCreationTimeSeconds(System.currentTimeMillis() / 1000);
+                final Address address = new Address(Constants.NETWORK_PARAMETERS, key.getPubKeyHash());
+                new AlertDialog.Builder(WalletActivity.this)
+                        .setTitle("Import Private Key")
+                        .setMessage("Would you like to add " +
+                                address.toString() +
+                                " to your wallet?  If there are currently funds on it, they will only be accessible " +
+                                "by resetting the blockchain, which can take a very long time.  If it is a new " +
+                                "empty address, everything should work fine.")
+                        .setCancelable(true)
+                        .setNeutralButton(android.R.string.cancel,
+                                new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog, int whichButton) {
+                                    }
+                                })
+                        .setPositiveButton(android.R.string.ok,
+                                new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialogInterface, int i) {
+                                        wallet.addKey(key);
+                                    }
+                                })
+                        .show();
+            }
+        }.parse();
 	}
 
 	@Override
@@ -223,6 +273,7 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 		menu.findItem(R.id.wallet_options_import_keys).setEnabled(
 				Environment.MEDIA_MOUNTED.equals(externalStorageState) || Environment.MEDIA_MOUNTED_READ_ONLY.equals(externalStorageState));
 		menu.findItem(R.id.wallet_options_export_keys).setEnabled(Environment.MEDIA_MOUNTED.equals(externalStorageState));
+		menu.findItem(R.id.wallet_options_disconnect).setVisible(true);
 
 		return true;
 	}
@@ -264,6 +315,10 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 				handleExportKeys();
 				return true;
 
+			case R.id.wallet_options_disconnect:
+				handleDisconnect();
+				return true;
+
 			case R.id.wallet_options_preferences:
 				startActivity(new Intent(this, PreferencesActivity.class));
 				return true;
@@ -273,7 +328,7 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 				return true;
 
 			case R.id.wallet_options_safety:
-				HelpDialogFragment.page(getSupportFragmentManager(), "safety");
+				HelpDialogFragment.page(getSupportFragmentManager(), R.string.help_safety);
 				return true;
 
 			case R.id.wallet_options_donate:
@@ -281,7 +336,7 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 				return true;
 
 			case R.id.wallet_options_help:
-				HelpDialogFragment.page(getSupportFragmentManager(), "help");
+				HelpDialogFragment.page(getSupportFragmentManager(), R.string.help_wallet);
 				return true;
 		}
 
@@ -299,15 +354,26 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 	}
 
 	public void handleScan()
-	{
-		startActivityForResult(new Intent(this, ScanActivity.class), REQUEST_CODE_SCAN);
-	}
+    {
+        if(prefs.getString(Constants.PREFS_KEY_QR_SCANNER, "").equals("internal")) {
+            startActivityForResult(new Intent(this, ScanActivity.class), REQUEST_CODE_SCAN);
+        } else {
+            IntentIntegrator integrator = new IntentIntegrator(this);
+            integrator.initiateScan();
+        }
+    }
 
 	public void handleExportKeys()
 	{
 		showDialog(DIALOG_EXPORT_KEYS);
 
 		prefs.edit().putBoolean(Constants.PREFS_KEY_REMIND_BACKUP, false).commit();
+	}
+
+	private void handleDisconnect()
+	{
+		getWalletApplication().stopBlockchainService();
+		finish();
 	}
 
 	@Override
@@ -718,7 +784,12 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 	private void versionAlert(final int serverVersionCode)
 	{
 		final PackageManager pm = getPackageManager();
-		final Intent marketIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(String.format(Constants.MARKET_APP_URL, getPackageName())));
+
+		final Intent marketIntent;
+        if(GenericUtils.isBlackberry())
+            marketIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(String.format(Constants.BB_MARKET_APP_URL, getPackageName())));
+        else
+            marketIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(String.format(Constants.ANDROID_MARKET_APP_URL, getPackageName())));
 		final Intent binaryIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(Constants.BINARY_URL));
 
 		final AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -789,10 +860,19 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 
 			final BufferedReader keyReader = new BufferedReader(plainReader);
 			final List<ECKey> importedKeys = WalletUtils.readKeys(keyReader);
-			keyReader.close();
+            final BufferedReader noteReader = new BufferedReader(plainReader);
+            final Map<String, String> notes = WalletUtils.readNotes(noteReader);
 
 			final int numKeysToImport = importedKeys.size();
 			final int numKeysImported = wallet.addKeys(importedKeys);
+
+            // Write each transaction to shared preferences
+            Iterator it = notes.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry pair = (Map.Entry)it.next();
+                prefs.edit().putString((String)pair.getKey(), (String)pair.getValue()).commit();
+                it.remove(); // avoids a ConcurrentModificationException
+            }
 
 			final AlertDialog.Builder dialog = new AlertDialog.Builder(this);
 			dialog.setInverseBackgroundForced(true);
@@ -848,8 +928,10 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 	{
 		try
 		{
-			Constants.EXTERNAL_WALLET_BACKUP_DIR.mkdirs();
-			final DateFormat dateFormat = Iso8601Format.newDateFormat();
+			if(!Constants.EXTERNAL_WALLET_BACKUP_DIR.mkdirs()) {
+                Log.d("WalletActivity", "mkdirs() returned false.  This isn't critical, but might be interesting");
+            }
+			final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HHmmss");
 			dateFormat.setTimeZone(TimeZone.getDefault());
 			final File file = new File(Constants.EXTERNAL_WALLET_BACKUP_DIR, Constants.EXTERNAL_WALLET_KEY_BACKUP + "-"
 					+ dateFormat.format(new Date()));
@@ -900,10 +982,16 @@ public final class WalletActivity extends AbstractOnDemandServiceActivity
 	{
 		final Intent intent = new Intent(Intent.ACTION_SEND);
 		intent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.export_keys_dialog_mail_subject));
-		intent.putExtra(Intent.EXTRA_TEXT,
-				getString(R.string.export_keys_dialog_mail_text) + "\n\n" + String.format(Constants.WEBMARKET_APP_URL, getPackageName()) + "\n\n"
+        if(GenericUtils.isBlackberry()) {
+            intent.putExtra(Intent.EXTRA_TEXT,
+                getString(R.string.export_keys_dialog_mail_text) + "\n\n" + String.format(Constants.BB_WEBMARKET_APP_URL, getPackageName()) + "\n\n"
+                        + Constants.SOURCE_URL + '\n');
+        } else {
+		    intent.putExtra(Intent.EXTRA_TEXT,
+				getString(R.string.export_keys_dialog_mail_text) + "\n\n" + String.format(Constants.ANDROID_WEBMARKET_APP_URL, getPackageName()) + "\n\n"
 						+ Constants.SOURCE_URL + '\n');
-		intent.setType("x-bitcoin/private-keys");
+        }
+		intent.setType("x-litecoin/private-keys");
 		intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(file));
 		startActivity(Intent.createChooser(intent, getString(R.string.export_keys_dialog_mail_intent_chooser)));
 

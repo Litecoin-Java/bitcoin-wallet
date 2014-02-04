@@ -52,7 +52,7 @@
 	<string name="send_coins_fragment_receiving_address_error_cross_network">לא ניתן להשתמש בכתובת זו בארנק זה</string>
 	<string name="send_coins_fragment_receiving_address_error_cross_network_unknown">לא ניתן להשתמש בכתובת  זו ברשת לא ידועה</string>
 	<string name="send_coins_fragment_available_label">ניתן להוצאה</string>
-	<string name="send_coins_fragment_pending">(BTC %s waiting for confirmation)</string>
+	<string name="send_coins_fragment_pending">(LTC %s waiting for confirmation)</string>
 	<string name="send_coins_fragment_amount_label">סכום לתשלום</string>
 	<string name="send_coins_fragment_amount_empty">הקש סכום</string>
 	<string name="send_coins_fragment_amount_error">סכום לא חוקי</string>
@@ -62,8 +62,6 @@
 	<string name="send_coins_sending_msg">שולח…</string>
 	<string name="send_coins_sent_msg">נשלח!</string>
 	<string name="send_coins_failed_msg">נכשל!</string>
-	<string name="send_coins_add_address_dialog_title">האם להוסיף את הנמען לפסר הכתובות ?</string>
-	<string name="send_coins_add_address_dialog_button_add">הוסף כתובת</string>
 	<string name="send_coins_error_msg">בעיה בשליחת מטבעות</string>
 	<string name="send_coins_address_context_clear_title">הקש כתובת חדשה</string>
 	<string name="request_coins_activity_title">בקש ביטקוין</string>
@@ -97,10 +95,6 @@
 	<string name="transaction_row_message_received_unconfirmed_unlocked">התשלום יהיה זמין בעוד מספר דקות</string>
 	<string name="transaction_row_message_received_unconfirmed_locked">לא ניתן לבטוח בתשלום זה</string>
 	<string name="transaction_row_message_received_dead">תשלום זה בוטל על ידי השולח</string>
-	<string name="amount_calculator_dialog_title">מחשבון המרה</string>
-	<string name="amount_calculator_dialog_button_use">השתמש</string>
-	<string name="amount_calculator_dialog_exchange_rate">BTC 1 = %1$s %2$s\n fetched from %3$s</string>
-	<string name="amount_calculator_dialog_exchange_rate_not_available">יחס המרה לא זמין</string>
 	<string name="peer_list_fragment_empty">אין שכנים מחוברים</string>
 	<string name="peer_list_row_ping_time">⇆ %d&#x2009;ms</string>
 	<string name="import_keys_dialog_title">ייבא מפתחות פפרטיים</string>
@@ -127,7 +121,7 @@
 	<string name="import_export_keys_dialog_failure_title">שגיאה</string>
 	<string name="scan_camera_problem_dialog_title">סליחה</string>
 	<string name="scan_camera_problem_dialog_message">בעיה במצלמה</string>
-	<string name="input_parser_invalid_bitcoin_uri">כתובת ביטקוין לא חוקית:\n%s</string>
+	<string name="input_parser_invalid_litecoin_uri">כתובת ביטקוין לא חוקית:\n%s</string>
 	<string name="input_parser_invalid_address">כתובת ביטקוין לא חוקית</string>
 	<string name="preferences_activity_title">הגדרות</string>
 	<string name="preferences_category_main">העדפות</string>
@@ -157,7 +151,7 @@
 	<string name="report_issue_dialog_mail_intent_chooser">שלח דוח באמצעות…</string>
 	<string name="about_title">על</string>
 	<string name="about_license_title">רישיון</string>
-	<string name="about_credits_bitcoinj_title">This app is using bitcoinj %s</string>
+	<string name="about_credits_litecoinj_title">This app is using litecoinj %s</string>
 	<string name="about_credits_zxing_title">"This app is using 'zxing'"</string>
 	<string name="about_credits_icon_title">"This app is using an icon by 'bitboy'"</string>
 	<string name="about_author_twitter_title">Author at Twitter</string>

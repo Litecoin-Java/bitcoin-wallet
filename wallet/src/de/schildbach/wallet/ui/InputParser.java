@@ -42,10 +42,10 @@ import com.google.bitcoin.uri.BitcoinURIParseException;
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.util.Bluetooth;
 import de.schildbach.wallet.util.Qr;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public abstract class InputParser
 {
@@ -53,7 +53,7 @@ public abstract class InputParser
 	{
 		private final String input;
 
-		public StringInputParser(@Nonnull final String input)
+		public StringInputParser(final String input)
 		{
 			this.input = input;
 		}
@@ -61,11 +61,12 @@ public abstract class InputParser
 		@Override
 		public void parse()
 		{
-			if (input.startsWith("bitcoin:"))
+            if(input == null) return;
+			if (input.startsWith("litecoin:"))
 			{
 				try
 				{
-					final BitcoinURI bitcoinUri = new BitcoinURI(null, input);
+					final BitcoinURI bitcoinUri = new BitcoinURI(Constants.NETWORK_PARAMETERS, input);
 					final Address address = bitcoinUri.getAddress();
 					final String addressLabel = bitcoinUri.getLabel();
 					final BigInteger amount = bitcoinUri.getAmount();
@@ -75,7 +76,7 @@ public abstract class InputParser
 				}
 				catch (final BitcoinURIParseException x)
 				{
-					error(R.string.input_parser_invalid_bitcoin_uri, input);
+					error(R.string.input_parser_invalid_litecoin_uri, input);
 				}
 			}
 			else if (PATTERN_BITCOIN_ADDRESS.matcher(input).matches())
@@ -93,12 +94,14 @@ public abstract class InputParser
 			}
 			else if (PATTERN_PRIVATE_KEY.matcher(input).matches())
 			{
+                // Scan of a private key
+                // Add it to the wallet
+                // TODO: In the future, give a sweep option as well
+                //       See issue #11
 				try
 				{
 					final ECKey key = new DumpedPrivateKey(Constants.NETWORK_PARAMETERS, input).getKey();
-					final Address address = new Address(Constants.NETWORK_PARAMETERS, key.getPubKeyHash());
-
-					bitcoinRequest(address, null, null, null);
+                    handlePrivateKey(key);
 				}
 				catch (final AddressFormatException x)
 				{
@@ -168,6 +171,8 @@ public abstract class InputParser
 	protected abstract void bitcoinRequest(@Nonnull Address address, @Nullable String addressLabel, @Nullable BigInteger amount,
 			@Nullable String bluetoothMac);
 
+    protected abstract void handlePrivateKey(@Nonnull ECKey key);
+
 	protected abstract void directTransaction(@Nonnull Transaction transaction);
 
 	protected abstract void error(int messageResId, Object... messageArgs);
@@ -189,6 +194,6 @@ public abstract class InputParser
 	}
 
 	private static final Pattern PATTERN_BITCOIN_ADDRESS = Pattern.compile("[" + new String(Base58.ALPHABET) + "]{20,40}");
-	private static final Pattern PATTERN_PRIVATE_KEY = Pattern.compile("5[" + new String(Base58.ALPHABET) + "]{50,51}");
+	private static final Pattern PATTERN_PRIVATE_KEY = Pattern.compile("[T6][" + new String(Base58.ALPHABET) + "]{50,51}");
 	private static final Pattern PATTERN_TRANSACTION = Pattern.compile("[0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ$\\*\\+\\-\\.\\/\\:]{100,}");
 }

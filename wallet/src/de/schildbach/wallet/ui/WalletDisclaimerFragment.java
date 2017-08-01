@@ -38,10 +38,10 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.service.BlockchainService;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class WalletDisclaimerFragment extends Fragment implements OnSharedPreferenceChangeListener
 {
@@ -75,7 +75,7 @@ public final class WalletDisclaimerFragment extends Fragment implements OnShared
 				if (showBackup)
 					((WalletActivity) activity).handleExportKeys();
 				else
-					HelpDialogFragment.page(getFragmentManager(), "safety");
+					HelpDialogFragment.page(getFragmentManager(), R.string.help_safety);
 			}
 		});
 

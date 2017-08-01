@@ -29,16 +29,18 @@ import android.support.v4.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
 
 import com.actionbarsherlock.app.ActionBar;
+import com.actionbarsherlock.view.Menu;
+import com.actionbarsherlock.view.MenuInflater;
 import com.actionbarsherlock.view.MenuItem;
 import com.google.bitcoin.core.Address;
 import com.google.bitcoin.core.ECKey;
 
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.util.ViewPagerTabs;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class AddressBookActivity extends AbstractWalletActivity
 {
@@ -77,7 +79,7 @@ public final class AddressBookActivity extends AbstractWalletActivity
 
 			pager.setAdapter(pagerAdapter);
 			pager.setOnPageChangeListener(pagerTabs);
-			final int position = getIntent().getBooleanExtra(EXTRA_SENDING, true) == true ? 1 : 0;
+			final int position = getIntent().getBooleanExtra(EXTRA_SENDING, true) ? 1 : 0;
 			pager.setCurrentItem(position);
 			pager.setPageMargin(2);
 			pager.setPageMarginDrawable(R.color.bg_less_bright);
@@ -110,7 +112,7 @@ public final class AddressBookActivity extends AbstractWalletActivity
 		return super.onOptionsItemSelected(item);
 	}
 
-	/* private */void updateFragments()
+    void updateFragments()
 	{
 		final List<ECKey> keys = getWalletApplication().getWallet().getKeys();
 		final ArrayList<Address> addresses = new ArrayList<Address>(keys.size());

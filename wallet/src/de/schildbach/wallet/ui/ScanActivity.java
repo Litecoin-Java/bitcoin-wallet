@@ -59,10 +59,10 @@ import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
 
 import de.schildbach.wallet.camera.CameraManager;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class ScanActivity extends Activity implements SurfaceHolder.Callback
 {
@@ -81,8 +81,9 @@ public final class ScanActivity extends Activity implements SurfaceHolder.Callba
 	private static final int DIALOG_CAMERA_PROBLEM = 0;
 
 	private static boolean DISABLE_CONTINUOUS_AUTOFOCUS = Build.MODEL.equals("GT-I9100") // Galaxy S2
+			|| Build.MODEL.equals("SGH-T989") // Galaxy S2
+			|| Build.MODEL.equals("SGH-T989D") // Galaxy S2 X
 			|| Build.MODEL.equals("SAMSUNG-SGH-I727") // Galaxy S2 Skyrocket
-			|| Build.MODEL.equals("SGH-T989") // Galaxy S2 X
 			|| Build.MODEL.equals("GT-I9300") // Galaxy S3
 			|| Build.MODEL.equals("GT-N7000"); // Galaxy Note
 

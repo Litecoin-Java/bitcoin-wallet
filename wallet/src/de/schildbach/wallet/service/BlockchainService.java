@@ -24,10 +24,10 @@ import javax.annotation.CheckForNull;
 import com.google.bitcoin.core.Peer;
 import com.google.bitcoin.core.StoredBlock;
 
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public interface BlockchainService
 {
@@ -44,10 +44,10 @@ public interface BlockchainService
 	public static final int ACTION_BLOCKCHAIN_STATE_DOWNLOAD_NETWORK_PROBLEM = 2;
 
 	public static final String ACTION_CANCEL_COINS_RECEIVED = R.class.getPackage().getName() + ".cancel_coins_received";
-	public static final String ACTION_HOLD_WIFI_LOCK = R.class.getPackage().getName() + ".hold_wifi_lock";
 	public static final String ACTION_RESET_BLOCKCHAIN = R.class.getPackage().getName() + ".reset_blockchain";
 	public static final String ACTION_BROADCAST_TRANSACTION = R.class.getPackage().getName() + ".broadcast_transaction";
 	public static final String ACTION_BROADCAST_TRANSACTION_HASH = "hash";
+    public static final String ACTION_STOP_SERVICE = "stop_service";
 
 	@CheckForNull
 	List<Peer> getConnectedPeers();

@@ -34,10 +34,10 @@ import com.actionbarsherlock.app.SherlockFragmentActivity;
 
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.WalletApplication;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public abstract class AbstractWalletActivity extends SherlockFragmentActivity
 {

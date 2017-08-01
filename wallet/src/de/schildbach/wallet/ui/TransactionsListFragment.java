@@ -66,6 +66,7 @@ import com.google.bitcoin.core.Transaction.Purpose;
 import com.google.bitcoin.core.TransactionConfidence.ConfidenceType;
 import com.google.bitcoin.core.Wallet;
 
+import com.google.bitcoin.script.Script;
 import de.schildbach.wallet.AddressBookProvider;
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.WalletApplication;
@@ -74,10 +75,10 @@ import de.schildbach.wallet.util.Nfc;
 import de.schildbach.wallet.util.Qr;
 import de.schildbach.wallet.util.ThrottlingWalletChangeListener;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public class TransactionsListFragment extends SherlockListFragment implements LoaderCallbacks<List<Transaction>>, OnSharedPreferenceChangeListener
 {
@@ -297,11 +298,25 @@ public class TransactionsListFragment extends SherlockListFragment implements Lo
 						mode.finish();
 						return true;
 
+                    case R.id.wallet_transactions_context_edit_note:
+                        handleEditNote(tx);
+
+                        mode.finish();
+                        return true;
+
 					case R.id.wallet_transactions_context_browse:
 						startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(Constants.EXPLORE_BASE_URL + "tx/" + tx.getHashAsString())));
 
 						mode.finish();
 						return true;
+
+                    case R.id.wallet_transactions_context_browse2:
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(Constants.EXPLORE2_BASE_URL + "tx/" + tx.getHashAsString())));
+
+                        mode.finish();
+                        return true;
+                    case R.id.wallet_transactions_context_show_transaction:
+                        TransactionActivity.show(activity, tx);
 				}
 				return false;
 			}
@@ -316,6 +331,11 @@ public class TransactionsListFragment extends SherlockListFragment implements Lo
 			{
 				EditAddressBookEntryFragment.edit(getFragmentManager(), address.toString());
 			}
+
+            private void handleEditNote(@Nonnull final Transaction tx)
+            {
+                EditTransactionNoteFragment.edit(getFragmentManager(), tx.getHashAsString(), adapter);
+            }
 
 			private void handleShowQr()
 			{
@@ -361,7 +381,10 @@ public class TransactionsListFragment extends SherlockListFragment implements Lo
 		{
 			adapter.notifyDataSetChanged();
 		}
-	};
+
+        @Override
+        public void onScriptsAdded(Wallet wallet, List<Script> scripts) { }
+    };
 
 	private static class TransactionsLoader extends AsyncTaskLoader<List<Transaction>>
 	{
@@ -430,7 +453,10 @@ public class TransactionsListFragment extends SherlockListFragment implements Lo
 			{
 				forceLoad();
 			}
-		};
+
+            @Override
+            public void onScriptsAdded(Wallet wallet, List<Script> scripts) { }
+        };
 
 		private static final Comparator<Transaction> TRANSACTION_COMPARATOR = new Comparator<Transaction>()
 		{

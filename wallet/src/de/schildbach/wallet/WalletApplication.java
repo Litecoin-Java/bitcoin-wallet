@@ -34,18 +34,23 @@ import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nonnull;
 
+import org.bitcoinj.wallet.Protos;
+import org.litecoin.LitecoinWallet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
+import android.app.AlarmManager;
 import android.app.Application;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.os.Build;
 import android.os.StrictMode;
 import android.preference.PreferenceManager;
 import android.text.format.DateUtils;
@@ -66,6 +71,7 @@ import com.google.bitcoin.store.UnreadableWalletException;
 import com.google.bitcoin.store.WalletProtobufSerializer;
 import com.google.bitcoin.utils.Threading;
 import com.google.bitcoin.wallet.WalletFiles;
+import com.google.bitcoin.core.NetworkParameters;
 
 import de.schildbach.wallet.service.BlockchainService;
 import de.schildbach.wallet.service.BlockchainServiceImpl;
@@ -73,10 +79,10 @@ import de.schildbach.wallet.util.CrashReporter;
 import de.schildbach.wallet.util.Io;
 import de.schildbach.wallet.util.LinuxSecureRandom;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public class WalletApplication extends Application
 {
@@ -275,7 +281,18 @@ public class WalletApplication extends Application
 			{
 				walletStream = new FileInputStream(walletFile);
 
-				wallet = new WalletProtobufSerializer().readWallet(walletStream);
+                try {
+                    WalletProtobufSerializer ser = new WalletProtobufSerializer();
+                    Protos.Wallet walletProto = ser.parseToProto(walletStream);
+                    final String paramsID = walletProto.getNetworkIdentifier();
+                    NetworkParameters params = NetworkParameters.fromID(paramsID);
+                    if (params == null)
+                        throw new UnreadableWalletException("Unknown network parameters ID " + paramsID);
+                    wallet = new LitecoinWallet(params);
+                    ser.readWallet(walletProto, wallet);
+                } catch (IOException e) {
+                    throw new UnreadableWalletException("Could not parse input stream to protobuf", e);
+                }
 
 				log.info("wallet loaded from: '" + walletFile + "', took " + (System.currentTimeMillis() - start) + "ms");
 			}
@@ -322,7 +339,7 @@ public class WalletApplication extends Application
 		}
 		else
 		{
-			wallet = new Wallet(Constants.NETWORK_PARAMETERS);
+			wallet = new LitecoinWallet(Constants.NETWORK_PARAMETERS);
 
 			log.info("new wallet created");
 		}
@@ -359,7 +376,7 @@ public class WalletApplication extends Application
 		final List<ECKey> keys = WalletUtils.readKeys(in);
 		in.close();
 
-		final Wallet wallet = new Wallet(Constants.NETWORK_PARAMETERS);
+		final Wallet wallet = new LitecoinWallet(Constants.NETWORK_PARAMETERS);
 		for (final ECKey key : keys)
 			wallet.addKey(key);
 
@@ -410,22 +427,15 @@ public class WalletApplication extends Application
 		log.debug("wallet saved to: '" + walletFile + "', took " + (System.currentTimeMillis() - start) + "ms");
 	}
 
+    // Changed to append date/time stamp to prevent key overwriting
 	private void backupKeys()
 	{
-		try
-		{
-			writeKeys(openFileOutput(Constants.WALLET_KEY_BACKUP_BASE58, Context.MODE_PRIVATE));
-		}
-		catch (final IOException x)
-		{
-			log.error("problem writing key backup", x);
-		}
-
 		try
 		{
 			final String filename = String.format(Locale.US, "%s.%02d", Constants.WALLET_KEY_BACKUP_BASE58,
 					(System.currentTimeMillis() / DateUtils.DAY_IN_MILLIS) % 100l);
 			writeKeys(openFileOutput(filename, Context.MODE_PRIVATE));
+            // If we
 		}
 		catch (final IOException x)
 		{
@@ -527,5 +537,36 @@ public class WalletApplication extends Application
 			return 4;
 		else
 			return 6;
+	}
+
+	public static void scheduleStartBlockchainService(@Nonnull final Context context)
+	{
+		final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+		final long prefsLastUsed = prefs.getLong(Constants.PREFS_KEY_LAST_USED, 0);
+
+		final long now = System.currentTimeMillis();
+		final long lastUsedAgo = now - prefsLastUsed;
+
+		// apply some backoff
+		final long alarmInterval;
+		if (lastUsedAgo < Constants.LAST_USAGE_THRESHOLD_JUST_MS)
+			alarmInterval = AlarmManager.INTERVAL_FIFTEEN_MINUTES;
+		else if (lastUsedAgo < Constants.LAST_USAGE_THRESHOLD_RECENTLY_MS)
+			alarmInterval = AlarmManager.INTERVAL_HALF_DAY;
+		else
+			alarmInterval = AlarmManager.INTERVAL_DAY;
+
+		log.info("last used {} minutes ago, rescheduling blockchain sync in roughly {} minutes", lastUsedAgo / DateUtils.MINUTE_IN_MILLIS,
+				alarmInterval / DateUtils.MINUTE_IN_MILLIS);
+
+		final AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+		final PendingIntent alarmIntent = PendingIntent.getService(context, 0, new Intent(context, BlockchainServiceImpl.class), 0);
+		alarmManager.cancel(alarmIntent);
+		if (Build.VERSION.SDK_INT >= Constants.SDK_KITKAT)
+			// as of KitKat, set() is inexact
+			alarmManager.set(AlarmManager.RTC_WAKEUP, now + alarmInterval, alarmIntent);
+		else
+			// workaround for no inexact set() before KitKat
+			alarmManager.setInexactRepeating(AlarmManager.RTC_WAKEUP, now + alarmInterval, AlarmManager.INTERVAL_DAY, alarmIntent);
 	}
 }

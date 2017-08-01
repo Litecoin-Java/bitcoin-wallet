@@ -23,19 +23,20 @@ import java.util.ArrayList;
 import javax.annotation.Nonnull;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
 import android.support.v4.widget.SimpleCursorAdapter;
 import android.support.v4.widget.SimpleCursorAdapter.ViewBinder;
-import android.text.ClipboardManager;
+import android.util.Log;
 import android.view.View;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -46,24 +47,28 @@ import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuInflater;
 import com.actionbarsherlock.view.MenuItem;
 import com.google.bitcoin.core.Address;
+import com.google.bitcoin.core.ECKey;
 import com.google.bitcoin.core.Transaction;
 import com.google.bitcoin.uri.BitcoinURI;
 
+import de.schildbach.wallet.util.IntentIntegratorSupportV4;
+import de.schildbach.wallet.util.IntentResult;
 import de.schildbach.wallet.AddressBookProvider;
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.ui.InputParser.StringInputParser;
+import de.schildbach.wallet.util.AbstractClipboardManager;
 import de.schildbach.wallet.util.BitmapFragment;
 import de.schildbach.wallet.util.Qr;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class SendingAddressesFragment extends SherlockListFragment implements LoaderManager.LoaderCallbacks<Cursor>
 {
 	private AbstractWalletActivity activity;
-	private ClipboardManager clipboardManager;
+	private AbstractClipboardManager clipboardManager;
 	private LoaderManager loaderManager;
 
 	private SimpleCursorAdapter adapter;
@@ -77,9 +82,8 @@ public final class SendingAddressesFragment extends SherlockListFragment impleme
 	public void onAttach(final Activity activity)
 	{
 		super.onAttach(activity);
-
+        this.clipboardManager = new AbstractClipboardManager(activity);
 		this.activity = (AbstractWalletActivity) activity;
-		this.clipboardManager = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
 		this.loaderManager = getLoaderManager();
 	}
 
@@ -119,43 +123,63 @@ public final class SendingAddressesFragment extends SherlockListFragment impleme
 		loaderManager.initLoader(0, null, this);
 	}
 
-	@Override
-	public void onActivityResult(final int requestCode, final int resultCode, final Intent intent)
-	{
-		if (requestCode == REQUEST_CODE_SCAN && resultCode == Activity.RESULT_OK)
-		{
-			final String input = intent.getStringExtra(ScanActivity.INTENT_EXTRA_RESULT);
+    @Override
+    public void onActivityResult(final int requestCode, final int resultCode, final Intent intent)
+    {
+        final String input;
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
+        /* Check if user wants to use internal scanner */
+        if(prefs.getString(Constants.PREFS_KEY_QR_SCANNER, "").equals("internal"))
+        {
+            input = intent.getStringExtra(ScanActivity.INTENT_EXTRA_RESULT);
+        }
+        else
+        {
+            IntentResult scanResult = IntentIntegratorSupportV4.parseActivityResult(requestCode, resultCode, intent);
+            if (scanResult != null)
+                input = scanResult.getContents();
+            else
+                input = null;
+        }
 
-			new StringInputParser(input)
-			{
-				@Override
-				protected void bitcoinRequest(final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
-				{
-					// workaround for "IllegalStateException: Can not perform this action after onSaveInstanceState"
-					handler.postDelayed(new Runnable()
-					{
-						@Override
-						public void run()
-						{
-							EditAddressBookEntryFragment.edit(getFragmentManager(), address.toString());
-						}
-					}, 500);
-				}
+        if(input == null) return;
+        Log.d("Litecoin", "SCAN RESULT:" + input);
 
-				@Override
-				protected void directTransaction(final Transaction transaction)
-				{
-					cannotClassify(input);
-				}
+        new StringInputParser(input)
+        {
+            @Override
+            protected void bitcoinRequest(@Nonnull final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
+            {
+                // workaround for "IllegalStateException: Can not perform this action after onSaveInstanceState"
+                handler.postDelayed(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        EditAddressBookEntryFragment.edit(getFragmentManager(), address.toString());
+                    }
+                }, 500);
+            }
 
-				@Override
-				protected void error(final int messageResId, final Object... messageArgs)
-				{
-					dialog(activity, null, R.string.address_book_options_scan_title, messageResId, messageArgs);
-				}
-			}.parse();
-		}
-	}
+            @Override
+            protected void directTransaction(@Nonnull final Transaction transaction)
+            {
+                cannotClassify(input);
+            }
+
+            @Override
+            protected void error(final int messageResId, final Object... messageArgs)
+            {
+                dialog(activity, null, R.string.address_book_options_scan_title, messageResId, messageArgs);
+            }
+
+            @Override
+            protected void handlePrivateKey(@Nonnull ECKey key) {
+                final Address address = new Address(Constants.NETWORK_PARAMETERS, key.getPubKeyHash());
+                bitcoinRequest(address, null, null, null);
+            }
+        }.parse();
+    }
 
 	@Override
 	public void onCreateOptionsMenu(final Menu menu, final MenuInflater inflater)
@@ -195,13 +219,13 @@ public final class SendingAddressesFragment extends SherlockListFragment impleme
 			new StringInputParser(input)
 			{
 				@Override
-				protected void bitcoinRequest(final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
+				protected void bitcoinRequest(@Nonnull final Address address, final String addressLabel, final BigInteger amount, final String bluetoothMac)
 				{
 					EditAddressBookEntryFragment.edit(getFragmentManager(), address.toString());
 				}
 
 				@Override
-				protected void directTransaction(final Transaction transaction)
+				protected void directTransaction(@Nonnull final Transaction transaction)
 				{
 					cannotClassify(input);
 				}
@@ -211,6 +235,12 @@ public final class SendingAddressesFragment extends SherlockListFragment impleme
 				{
 					dialog(activity, null, R.string.address_book_options_paste_from_clipboard_title, messageResId, messageArgs);
 				}
+
+                @Override
+                protected void handlePrivateKey(@Nonnull ECKey key) {
+                    final Address address = new Address(Constants.NETWORK_PARAMETERS, key.getPubKeyHash());
+                    bitcoinRequest(address, null, null, null);
+                }
 			}.parse();
 		}
 		else
@@ -221,8 +251,14 @@ public final class SendingAddressesFragment extends SherlockListFragment impleme
 
 	private void handleScan()
 	{
-		startActivityForResult(new Intent(activity, ScanActivity.class), REQUEST_CODE_SCAN);
-	}
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
+        if(prefs.getString(Constants.PREFS_KEY_QR_SCANNER, "").equals("internal")) {
+            startActivityForResult(new Intent(activity, ScanActivity.class), REQUEST_CODE_SCAN);
+        } else {
+            IntentIntegratorSupportV4 integrator = new IntentIntegratorSupportV4(this);
+            integrator.initiateScan();
+        }
+    }
 
 	@Override
 	public void onListItemClick(final ListView l, final View v, final int position, final long id)
@@ -318,14 +354,14 @@ public final class SendingAddressesFragment extends SherlockListFragment impleme
 
 	private void handleShowQr(final String address)
 	{
-		final String uri = BitcoinURI.convertToBitcoinURI(address, null, null, null);
+		final String uri = BitcoinURI.convertToBitcoinURI(Constants.NETWORK_PARAMETERS, address, null, null, null);
 		final int size = (int) (256 * getResources().getDisplayMetrics().density);
 		BitmapFragment.show(getFragmentManager(), Qr.bitmap(uri, size));
 	}
 
 	private void handleCopyToClipboard(final String address)
 	{
-		clipboardManager.setText(address);
+		clipboardManager.setText("address", address);
 		activity.toast(R.string.wallet_address_fragment_clipboard_msg);
 	}
 

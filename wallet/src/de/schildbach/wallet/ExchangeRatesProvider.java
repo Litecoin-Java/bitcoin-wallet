@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 the original author or authors.
+ * Copyright 2011-2013 the original author or authors.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,14 +30,18 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
-
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
+import android.util.Log;
+import de.schildbach.wallet.exchange.GoogleRateLookup;
+import de.schildbach.wallet.exchange.RateLookup;
+import de.schildbach.wallet.exchange.YahooRateLookup;
+import de.schildbach.wallet.util.GenericUtils;
+import de.schildbach.wallet.util.Io;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -45,14 +49,14 @@ import android.database.MatrixCursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.text.format.DateUtils;
-import de.schildbach.wallet.util.GenericUtils;
-import de.schildbach.wallet.util.Io;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public class ExchangeRatesProvider extends ContentProvider
 {
+    static final protected String TAG = ExchangeRatesProvider.class.getName();
+
 	public static class ExchangeRate
 	{
 		public ExchangeRate(@Nonnull final String currencyCode, @Nonnull final BigInteger rate, @Nonnull final String source)
@@ -81,22 +85,22 @@ public class ExchangeRatesProvider extends ContentProvider
 	private Map<String, ExchangeRate> exchangeRates = null;
 	private long lastUpdated = 0;
 
-	private static final URL BITCOINAVERAGE_URL;
-	private static final String[] BITCOINAVERAGE_FIELDS = new String[] { "24h_avg" };
-	private static final URL BITCOINCHARTS_URL;
-	private static final String[] BITCOINCHARTS_FIELDS = new String[] { "24h", "7d", "30d" };
-	private static final URL BLOCKCHAININFO_URL;
-	private static final String[] BLOCKCHAININFO_FIELDS = new String[] { "15m" };
-
-	// https://bitmarket.eu/api/ticker
+    private static final URL BTCE_URL;
+    private static final String[] BTCE_FIELDS = new String[] { "avg" };
+    private static final URL BTCE_EURO_URL;
+    private static final String[] BTCE_EURO_FIELDS = new String[] { "avg" };
+    private static final URL KRAKEN_URL;
+    private static final URL KRAKEN_EURO_URL;
+	private static final String[] KRAKEN_FIELDS = new String[] { "value" };
 
 	static
 	{
 		try
 		{
-			BITCOINAVERAGE_URL = new URL("https://api.bitcoinaverage.com/ticker/all");
-			BITCOINCHARTS_URL = new URL("http://api.bitcoincharts.com/v1/weighted_prices.json");
-			BLOCKCHAININFO_URL = new URL("https://blockchain.info/ticker");
+            BTCE_URL = new URL("https://btc-e.com/api/2/ltc_usd/ticker");
+            BTCE_EURO_URL = new URL("https://btc-e.com/api/2/ltc_eur/ticker");
+            KRAKEN_URL = new URL("https://api.kraken.com/0/public/Ticker?pair=XLTCZUSD");
+            KRAKEN_EURO_URL = new URL("https://api.kraken.com/0/public/Ticker?pair=XLTCZEUR");
 		}
 		catch (final MalformedURLException x)
 		{
@@ -127,15 +131,60 @@ public class ExchangeRatesProvider extends ContentProvider
 		if (exchangeRates == null || now - lastUpdated > UPDATE_FREQ_MS)
 		{
 			Map<String, ExchangeRate> newExchangeRates = null;
-			if (newExchangeRates == null)
-				newExchangeRates = requestExchangeRates(BITCOINAVERAGE_URL, BITCOINAVERAGE_FIELDS);
-			if (newExchangeRates == null)
-				newExchangeRates = requestExchangeRates(BITCOINCHARTS_URL, BITCOINCHARTS_FIELDS);
-			if (newExchangeRates == null)
-				newExchangeRates = requestExchangeRates(BLOCKCHAININFO_URL, BLOCKCHAININFO_FIELDS);
+            // Attempt to get USD exchange rates from all providers.  Stop after first.
+			newExchangeRates = requestExchangeRates(BTCE_URL, "USD", BTCE_FIELDS);
 
-			if (newExchangeRates != null)
+			if (newExchangeRates == null)
+            {
+                Log.i(TAG, "Failed to fetch BTCE USD rates");
+				newExchangeRates = requestExchangeRates(KRAKEN_URL, "USD", KRAKEN_FIELDS);
+            }
+
+            if (newExchangeRates == null)
+            {
+                Log.i(TAG, "Failed to fetch KRAKEN USD rates");
+                // Continue without USD rate (shouldn't generally happen)
+            }
+
+            // Get Euro rates as a fallback if Yahoo! fails below
+            Map<String, ExchangeRate> euroRate = requestExchangeRates(BTCE_EURO_URL, "EUR", BTCE_EURO_FIELDS);
+            if (euroRate == null)
+            {
+                Log.i(TAG, "Failed to fetch BTCE EUR rates");
+                euroRate = requestExchangeRates(KRAKEN_EURO_URL, "EUR", KRAKEN_FIELDS);
+            }
+
+            if (euroRate == null)
+            {
+                Log.i(TAG, "Failed to fetch KRAKEN EUR rates");
+            }
+            else
+            {
+                if(newExchangeRates != null)
+                    newExchangeRates.putAll(euroRate);
+                else
+                    newExchangeRates = euroRate;
+            }
+
+            if (newExchangeRates != null)
 			{
+                // Get USD conversion exchange rates from Google/Yahoo
+                ExchangeRate usdRate = newExchangeRates.get("USD");
+                RateLookup providers[] = {new GoogleRateLookup(), new YahooRateLookup()};
+                Map<String, ExchangeRate> fiatRates;
+                for(RateLookup provider : providers) {
+                    fiatRates = provider.getRates(usdRate);
+                    if(fiatRates != null) {
+                        // Remove EUR if we have a better source above
+                        if(euroRate != null)
+                            fiatRates.remove("EUR");
+                        // Remove USD rate because we already have it
+                        fiatRates.remove("USD");
+                        newExchangeRates.putAll(fiatRates);
+                        break;
+                    }
+                }
+
 				exchangeRates = newExchangeRates;
 				lastUpdated = now;
 			}
@@ -224,10 +273,8 @@ public class ExchangeRatesProvider extends ContentProvider
 		throw new UnsupportedOperationException();
 	}
 
-	private static Map<String, ExchangeRate> requestExchangeRates(final URL url, final String... fields)
+	private static Map<String, ExchangeRate> requestExchangeRates(final URL url, final String currencyCode, final String... fields)
 	{
-		final long start = System.currentTimeMillis();
-
 		HttpURLConnection connection = null;
 		Reader reader = null;
 
@@ -250,10 +297,10 @@ public class ExchangeRatesProvider extends ContentProvider
 				final JSONObject head = new JSONObject(content.toString());
 				for (final Iterator<String> i = head.keys(); i.hasNext();)
 				{
-					final String currencyCode = i.next();
-					if (!"timestamp".equals(currencyCode))
+					String code = i.next();
+					if (!"timestamp".equals(code))
 					{
-						final JSONObject o = head.getJSONObject(currencyCode);
+						final JSONObject o = head.getJSONObject(code);
 
 						for (final String field : fields)
 						{
@@ -263,7 +310,7 @@ public class ExchangeRatesProvider extends ContentProvider
 							{
 								try
 								{
-									final BigInteger rate = GenericUtils.toNanoCoins(rateStr, 0);
+									final BigInteger rate = GenericUtils.toNanoCoinsRounded(rateStr, 0);
 
 									if (rate.signum() > 0)
 									{
@@ -280,7 +327,7 @@ public class ExchangeRatesProvider extends ContentProvider
 					}
 				}
 
-				log.info("fetched exchange rates from " + url + ", took " + (System.currentTimeMillis() - start) + " ms");
+				log.info("fetched exchange rates from " + url);
 
 				return rates;
 			}

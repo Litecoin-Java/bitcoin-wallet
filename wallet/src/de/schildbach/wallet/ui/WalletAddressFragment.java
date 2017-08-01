@@ -45,10 +45,10 @@ import de.schildbach.wallet.util.BitmapFragment;
 import de.schildbach.wallet.util.Nfc;
 import de.schildbach.wallet.util.Qr;
 import de.schildbach.wallet.util.WalletUtils;
-import de.schildbach.wallet_test.R;
+import de.schildbach.wallet_ltc.R;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public final class WalletAddressFragment extends Fragment
 {
@@ -146,7 +146,8 @@ public final class WalletAddressFragment extends Fragment
 			bitcoinAddressLabel.setText(WalletUtils.formatAddress(selectedAddress, Constants.ADDRESS_FORMAT_GROUP_SIZE,
 					Constants.ADDRESS_FORMAT_LINE_SIZE));
 
-			final String addressStr = BitcoinURI.convertToBitcoinURI(selectedAddress, null, null, null);
+			final String addressStr = BitcoinURI.convertToBitcoinURI(Constants.NETWORK_PARAMETERS, selectedAddress, null,
+                    null, null);
 
 			final int size = (int) (256 * getResources().getDisplayMetrics().density);
 			qrCodeBitmap = Qr.bitmap(addressStr, size);

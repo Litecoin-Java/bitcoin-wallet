@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 the original author or authors.
+ * Copyright 2011-2013 the original author or authors.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,10 +23,11 @@ import java.util.Locale;
 
 import javax.annotation.Nonnull;
 
-import com.google.bitcoin.core.NetworkParameters;
+import com.google.bitcoin.core.Utils;
+import de.schildbach.wallet.Constants;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public class GenericUtils
 {
@@ -40,6 +41,11 @@ public class GenericUtils
 	{
 		return formatValue(value, "", "-", precision, shift);
 	}
+
+    public static boolean isBlackberry()
+    {
+        return System.getProperty("os.name").contains("qnx");
+    }
 
 	public static String formatValue(@Nonnull final BigInteger value, @Nonnull final String plusSign, @Nonnull final String minusSign,
 			final int precision, final int shift)
@@ -108,9 +114,26 @@ public class GenericUtils
 
 		if (nanoCoins.signum() < 0)
 			throw new IllegalArgumentException("negative amount: " + value);
-		if (nanoCoins.compareTo(NetworkParameters.MAX_MONEY) > 0)
+		if (nanoCoins.compareTo(Constants.NETWORK_PARAMETERS.getMaxMoney()) > 0)
 			throw new IllegalArgumentException("amount too large: " + value);
 
 		return nanoCoins;
 	}
+    public static BigInteger toNanoCoinsRounded(final String value, final int shift)
+    {
+        final BigInteger nanoCoins = new BigDecimal(value).movePointRight(8 - shift).toBigInteger();
+
+        if (nanoCoins.signum() < 0)
+            throw new IllegalArgumentException("negative amount: " + value);
+        if (nanoCoins.compareTo(Constants.NETWORK_PARAMETERS.getMaxMoney()) > 0)
+            throw new IllegalArgumentException("amount too large: " + value);
+
+        return nanoCoins;
+    }
+
+    public static BigDecimal fromNanoCoins(final BigInteger value, final int shift)
+    {
+        return new BigDecimal(value).movePointLeft(8 - shift);
+    }
+
 }

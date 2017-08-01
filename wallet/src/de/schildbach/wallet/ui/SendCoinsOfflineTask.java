@@ -22,12 +22,14 @@ import javax.annotation.Nonnull;
 import android.os.Handler;
 import android.os.Looper;
 
+import android.util.Log;
+import com.google.bitcoin.core.InsufficientMoneyException;
 import com.google.bitcoin.core.Transaction;
 import com.google.bitcoin.core.Wallet;
 import com.google.bitcoin.core.Wallet.SendRequest;
 
 /**
- * @author Andreas Schildbach
+ * @author Andreas Schildbach, Litecoin Dev Team
  */
 public abstract class SendCoinsOfflineTask
 {
@@ -49,9 +51,14 @@ public abstract class SendCoinsOfflineTask
 			@Override
 			public void run()
 			{
-				final Transaction transaction = wallet.sendCoinsOffline(sendRequest); // can take long
+                final Transaction transaction; // can take long
+                try {
+                    transaction = wallet.sendCoinsOffline(sendRequest);
+                } catch (InsufficientMoneyException e) {
+                    throw new RuntimeException(e);
+                }
 
-				callbackHandler.post(new Runnable()
+                callbackHandler.post(new Runnable()
 				{
 					@Override
 					public void run()
@@ -65,6 +72,28 @@ public abstract class SendCoinsOfflineTask
 			}
 		});
 	}
+
+    public final void commitRequest(@Nonnull final SendRequest sendRequest)
+    {
+        backgroundHandler.post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                final Transaction transaction; // can take long
+                wallet.commitTx(sendRequest.tx);
+
+                callbackHandler.post(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                            onSuccess(sendRequest.tx);
+                    }
+                });
+            }
+        });
+    }
 
 	protected abstract void onSuccess(@Nonnull Transaction transaction);
 
